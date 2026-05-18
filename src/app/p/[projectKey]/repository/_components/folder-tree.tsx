@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
-import { Folder, FolderOpen, Plus, Trash2 } from "lucide-react";
-import { createFolder, deleteFolder } from "../_actions";
+import { useState, useTransition, useRef } from "react";
+import { Folder, FolderOpen, Plus, Trash2, GripVertical } from "lucide-react";
+import { createFolder, deleteFolder, reorderFolders } from "../_actions";
 
 interface FolderItem {
   id: string;
@@ -18,10 +18,14 @@ interface Props {
   totalCases: number;
 }
 
-export function FolderTree({ projectKey, folders, activeFolderId, totalCases }: Props) {
+export function FolderTree({ projectKey, folders: initialFolders, activeFolderId, totalCases }: Props) {
+  const [folders, setFolders] = useState(initialFolders);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [pending, startTransition] = useTransition();
+
+  const draggedId = useRef<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +41,43 @@ export function FolderTree({ projectKey, folders, activeFolderId, totalCases }: 
   function handleDelete(folderId: string, folderName: string) {
     if (!confirm(`Delete folder "${folderName}"? Cases inside will become unfiled.`)) return;
     startTransition(() => deleteFolder(projectKey, folderId));
+  }
+
+  function handleDragStart(id: string) {
+    draggedId.current = id;
+  }
+
+  function handleDragOver(e: React.DragEvent, overId: string) {
+    e.preventDefault();
+    if (draggedId.current && draggedId.current !== overId) {
+      setDragOverId(overId);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent, overId: string) {
+    e.preventDefault();
+    const fromId = draggedId.current;
+    if (!fromId || fromId === overId) {
+      setDragOverId(null);
+      return;
+    }
+
+    const next = [...folders];
+    const fromIdx = next.findIndex((f) => f.id === fromId);
+    const toIdx = next.findIndex((f) => f.id === overId);
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+
+    setFolders(next);
+    setDragOverId(null);
+    draggedId.current = null;
+
+    startTransition(() => reorderFolders(projectKey, next.map((f) => f.id)));
+  }
+
+  function handleDragEnd() {
+    draggedId.current = null;
+    setDragOverId(null);
   }
 
   return (
@@ -56,8 +97,26 @@ export function FolderTree({ projectKey, folders, activeFolderId, totalCases }: 
 
       {folders.map((folder) => {
         const active = activeFolderId === folder.id;
+        const isOver = dragOverId === folder.id;
         return (
-          <div key={folder.id} className="group flex items-center gap-0.5 mb-0.5">
+          <div
+            key={folder.id}
+            draggable
+            onDragStart={() => handleDragStart(folder.id)}
+            onDragOver={(e) => handleDragOver(e, folder.id)}
+            onDrop={(e) => handleDrop(e, folder.id)}
+            onDragEnd={handleDragEnd}
+            className={[
+              "group flex items-center gap-0.5 mb-0.5 rounded-md transition-colors",
+              isOver ? "bg-[var(--color-accent-bg-subtle)] ring-1 ring-[var(--color-accent)]" : "",
+            ].join(" ")}
+          >
+            <span
+              className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing p-1 text-[var(--color-fg-subtle)] shrink-0"
+              title="Drag to reorder"
+            >
+              <GripVertical size={12} />
+            </span>
             <Link
               href={`/p/${projectKey}/repository?folder=${folder.id}`}
               className={[
@@ -81,7 +140,7 @@ export function FolderTree({ projectKey, folders, activeFolderId, totalCases }: 
               type="button"
               disabled={pending}
               onClick={() => handleDelete(folder.id, folder.name)}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--color-fg-subtle)] hover:text-[var(--color-danger)] transition-opacity"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--color-fg-subtle)] hover:text-[var(--color-danger)] transition-opacity shrink-0"
               title="Delete folder"
             >
               <Trash2 size={11} />

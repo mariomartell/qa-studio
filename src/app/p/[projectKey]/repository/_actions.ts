@@ -22,6 +22,24 @@ export async function createFolder(projectKey: string, name: string) {
   revalidatePath(`/p/${projectKey}/repository`);
 }
 
+export async function reorderFolders(
+  projectKey: string,
+  orderedIds: string[],
+) {
+  const project = await prisma.project.findUniqueOrThrow({
+    where: { key: projectKey },
+  });
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      prisma.folder.updateMany({
+        where: { id, projectId: project.id },
+        data: { order: index },
+      }),
+    ),
+  );
+  revalidatePath(`/p/${projectKey}/repository`);
+}
+
 export async function deleteFolder(projectKey: string, folderId: string) {
   const project = await prisma.project.findUniqueOrThrow({
     where: { key: projectKey },
