@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, CheckCircle2, RefreshCcw, Trash2 } from "lucide-react";
+import { PlayCircle, CheckCircle2, RefreshCcw, Trash2, Printer, Download } from "lucide-react";
 import { format } from "date-fns";
 import { completeRun, reopenRun, deleteRun } from "../_actions";
 
@@ -65,6 +65,16 @@ export default async function RunOverviewPage({
         description={run.description ?? undefined}
         actions={
           <>
+            <Link href={`/p/${projectKey}/runs/${runId}/print`} target="_blank">
+              <Button size="sm" variant="ghost">
+                <Printer size={14} /> Print / PDF
+              </Button>
+            </Link>
+            <Link href={`/p/${projectKey}/runs/${runId}/export`}>
+              <Button size="sm" variant="ghost">
+                <Download size={14} /> CSV
+              </Button>
+            </Link>
             <form action={handleDelete}>
               <Button
                 type="submit"
