@@ -8,14 +8,8 @@ import { Button } from "@/components/ui/button";
 import { PlayCircle, CheckCircle2, RefreshCcw, Trash2, Printer, Download } from "lucide-react";
 import { format } from "date-fns";
 import { completeRun, reopenRun, deleteRun } from "../_actions";
+import { RunResultsClient } from "./_components/run-results-client";
 
-const resultTone = {
-  Passed: "success",
-  Failed: "danger",
-  Blocked: "warn",
-  Skipped: "neutral",
-  Untested: "neutral",
-} as const;
 
 export default async function RunOverviewPage({
   params,
@@ -30,7 +24,17 @@ export default async function RunOverviewPage({
       cases: {
         orderBy: { order: "asc" },
         include: {
-          testCase: { select: { id: true, title: true, priority: true } },
+          testCase: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              expectedResult: true,
+              priority: true,
+              tags: true,
+              folder: { select: { name: true } },
+            },
+          },
         },
       },
     },
@@ -124,53 +128,26 @@ export default async function RunOverviewPage({
         />
       </div>
 
-      <Card>
-        <div className="px-4 py-3 border-b flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Results</h2>
-          <div className="flex gap-1.5">
-            {(["Passed", "Failed", "Blocked", "Skipped", "Untested"] as const).map((k) =>
-              counts[k] ? (
-                <Badge
-                  key={k}
-                  tone={resultTone[k]}
-                  dot
-                >
-                  {counts[k]} {k}
-                </Badge>
-              ) : null,
-            )}
-          </div>
-        </div>
-        <ul>
-          {run.cases.map((rc, i) => (
-            <li
-              key={rc.id}
-              className="border-t first:border-t-0 px-4 py-2.5 flex items-center gap-3 hover:bg-[var(--color-bg-subtle)]"
-            >
-              <span className="font-mono text-xs text-[var(--color-fg-subtle)] w-8 shrink-0">
-                {i + 1}
-              </span>
-              <Link
-                href={`/p/${projectKey}/cases/${rc.testCase.id}`}
-                className="text-sm flex-1 truncate hover:text-[var(--color-accent)]"
-              >
-                {rc.testCase.title}
-              </Link>
-              {rc.status === "Failed" && (
-                <Link
-                  href={`/p/${projectKey}/defects/new?fromRunCase=${rc.id}`}
-                  className="text-xs text-[var(--color-danger)] hover:underline shrink-0"
-                >
-                  File defect →
-                </Link>
-              )}
-              <Badge tone={resultTone[rc.status as keyof typeof resultTone]} dot>
-                {rc.status}
-              </Badge>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <RunResultsClient
+        projectKey={projectKey}
+        runId={runId}
+        cases={run.cases.map((rc) => ({
+          id: rc.id,
+          order: rc.order,
+          status: rc.status,
+          actualResult: rc.actualResult,
+          executedAt: rc.executedAt?.toISOString() ?? null,
+          testCase: {
+            id: rc.testCase.id,
+            title: rc.testCase.title,
+            description: rc.testCase.description,
+            expectedResult: rc.testCase.expectedResult,
+            priority: rc.testCase.priority,
+            tags: rc.testCase.tags,
+            folderName: rc.testCase.folder?.name ?? null,
+          },
+        }))}
+      />
     </>
   );
 }
