@@ -10,6 +10,7 @@ import {
   Bug,
   BarChart3,
   FolderKanban,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ const items = (key: string): NavItem[] => [
   { href: `/p/${key}/exploratory`, label: "Exploratory", icon: Compass },
   { href: `/p/${key}/defects`, label: "Defects", icon: Bug },
   { href: `/p/${key}/reports`, label: "Reports", icon: BarChart3 },
+  { href: `/p/${key}/settings`, label: "Settings", icon: Settings, matchPrefix: `/p/${key}/settings` },
 ];
 
 export function Sidebar({ projectKey, projectName, projects }: SidebarProps) {

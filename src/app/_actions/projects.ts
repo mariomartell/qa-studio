@@ -32,6 +32,14 @@ export async function createProject(formData: FormData) {
   redirect(`/p/${project.key}`);
 }
 
+export async function deleteProject(projectKey: string) {
+  const project = await prisma.project.findUnique({ where: { key: projectKey } });
+  if (!project) throw new Error("project not found");
+  await prisma.project.delete({ where: { id: project.id } });
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
 export async function updateProject(
   projectKey: string,
   formData: FormData,
