@@ -29,6 +29,20 @@ server.tool("list_projects", "List all QA Studio projects", {}, async () => {
   return { content: [{ type: "text", text: JSON.stringify(projects, null, 2) }] };
 });
 
+server.tool(
+  "get_project",
+  "Get details for a single project by key",
+  { projectKey: z.string().describe("Project key e.g. OGISO") },
+  async ({ projectKey }) => {
+    const project = await prisma.project.findUnique({
+      where: { key: projectKey.toUpperCase() },
+      include: { _count: { select: { testCases: true, folders: true, testRuns: true } } },
+    });
+    if (!project) return { content: [{ type: "text", text: `Project "${projectKey}" not found` }] };
+    return { content: [{ type: "text", text: JSON.stringify(project, null, 2) }] };
+  },
+);
+
 // ── Folders ─────────────────────────────────────────────────────────────────
 
 server.tool(
@@ -253,6 +267,50 @@ server.tool(
     }
 
     return { content: [{ type: "text", text: `Updated ${updated.length} cases. Not found: ${notFound.length > 0 ? notFound.join(", ") : "none"}` }] };
+  },
+);
+
+// ── Run lifecycle ────────────────────────────────────────────────────────────
+
+server.tool(
+  "complete_run",
+  "Mark a test run as Completed",
+  { runId: z.string().describe("Run ID") },
+  async ({ runId }) => {
+    const run = await prisma.testRun.findUnique({ where: { id: runId } });
+    if (!run) return { content: [{ type: "text", text: "Run not found" }] };
+    const updated = await prisma.testRun.update({
+      where: { id: runId },
+      data: { status: "Completed", completedAt: new Date() },
+    });
+    return { content: [{ type: "text", text: `Run ${updated.id} marked Completed at ${updated.completedAt}` }] };
+  },
+);
+
+server.tool(
+  "reopen_run",
+  "Reopen a Completed test run back to InProgress",
+  { runId: z.string().describe("Run ID") },
+  async ({ runId }) => {
+    const run = await prisma.testRun.findUnique({ where: { id: runId } });
+    if (!run) return { content: [{ type: "text", text: "Run not found" }] };
+    await prisma.testRun.update({
+      where: { id: runId },
+      data: { status: "InProgress", completedAt: null },
+    });
+    return { content: [{ type: "text", text: `Run ${runId} reopened` }] };
+  },
+);
+
+server.tool(
+  "delete_case",
+  "Delete a test case by ID",
+  { caseId: z.string().describe("Test case ID") },
+  async ({ caseId }) => {
+    const tc = await prisma.testCase.findUnique({ where: { id: caseId } });
+    if (!tc) return { content: [{ type: "text", text: "Test case not found" }] };
+    await prisma.testCase.delete({ where: { id: caseId } });
+    return { content: [{ type: "text", text: `Deleted test case ${caseId}` }] };
   },
 );
 
