@@ -31,7 +31,13 @@ export default async function RepositoryPage({
     prisma.folder.findMany({
       where: { projectId: project.id },
       orderBy: { order: "asc" },
-      include: { _count: { select: { testCases: true } } },
+      select: {
+        id: true,
+        name: true,
+        parentId: true,
+        order: true,
+        _count: { select: { testCases: true } },
+      },
     }),
     prisma.testCase.findMany({
       where: {
