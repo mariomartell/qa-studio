@@ -1,0 +1,225 @@
+// Testmo-style manual QA test management — MVP schema.
+// SQLite has no native enums, so status/type fields are strings;
+// the allowed values live in src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Project — top-level container. Everything belongs to a Project.
+// ──────────────────────────────────────────────────────────────────
+model Project {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  folders    Folder[]
+  testCases  TestCase[]
+  testRuns   TestRun[]
+  defects    Defect[]
+  sessions   ExploratorySession[]
+  milestones Milestone[]
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Folder — organises test cases inside a project (flat list).
+// ──────────────────────────────────────────────────────────────────
+model Folder {
+  id        String   @id @default(cuid())
+  projectId String
+  parentId  String?
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    Folder?    @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Folder[]   @relation("FolderTree")
+  testCases TestCase[]
+
+  @@index([projectId])
+  @@index([parentId])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// TestCase — the unit of testable behaviour.
+// ──────────────────────────────────────────────────────────────────
+model TestCase {
+  id             String   @id @default(cuid())
+  projectId      String
+  folderId       String?
+  title          String
+  description    String?
+  preconditions  String?
+  expectedResult String?
+  priority       String   @default("Medium")
+  type           String   @default("Functional")
+  status         String   @default("Draft")
+  tags           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  steps        TestStep[]
+  testRunCases TestRunCase[]
+  defectLinks  DefectLink[]  @relation("DefectLinkToCase")
+
+  @@index([projectId])
+  @@index([folderId])
+  @@index([status])
+}
+
+model TestStep {
+  id             String  @id @default(cuid())
+  testCaseId     String
+  order          Int
+  action         String
+  expectedResult String?
+  notes          String?
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([testCaseId, order])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// TestRun — an execution of a selected set of cases.
+// ──────────────────────────────────────────────────────────────────
+model TestRun {
+  id             String    @id @default(cuid())
+  projectId      String
+  milestoneId    String?
+  name           String
+  description    String?
+  assignedTester String?
+  status         String    @default("InProgress")
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  cases     TestRunCase[]
+
+  @@index([projectId])
+  @@index([milestoneId])
+}
+
+model TestRunCase {
+  id           String    @id @default(cuid())
+  testRunId    String
+  testCaseId   String
+  status       String    @default("Untested")
+  actualResult String?
+  executedBy   String?
+  executedAt   DateTime?
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  testRun     TestRun      @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testCase    TestCase     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  defectLinks DefectLink[] @relation("DefectLinkToRunCase")
+
+  @@index([testRunId])
+  @@index([testCaseId])
+  @@index([status])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// ExploratorySession — less structured testing.
+// ──────────────────────────────────────────────────────────────────
+model ExploratorySession {
+  id             String    @id @default(cuid())
+  projectId      String
+  title          String
+  charter        String?
+  productModule  String?
+  timeboxMinutes Int?
+  notes          String?
+  summary        String?
+  areasTested    String?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  defectLinks DefectLink[] @relation("DefectLinkToSession")
+
+  @@index([projectId])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Defect — a bug. Linkable to cases, run results, or sessions.
+// ──────────────────────────────────────────────────────────────────
+model Defect {
+  id               String   @id @default(cuid())
+  projectId        String
+  title            String
+  description      String?
+  stepsToReproduce String?
+  expectedResult   String?
+  actualResult     String?
+  severity         String   @default("Medium")
+  priority         String   @default("Medium")
+  status           String   @default("Open")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  links   DefectLink[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model DefectLink {
+  id            String   @id @default(cuid())
+  defectId      String
+  testCaseId    String?
+  testRunCaseId String?
+  sessionId     String?
+  createdAt     DateTime @default(now())
+
+  defect   Defect              @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  testCase TestCase?           @relation("DefectLinkToCase", fields: [testCaseId], references: [id], onDelete: Cascade)
+  runCase  TestRunCase?        @relation("DefectLinkToRunCase", fields: [testRunCaseId], references: [id], onDelete: Cascade)
+  session  ExploratorySession? @relation("DefectLinkToSession", fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([defectId])
+  @@index([testCaseId])
+  @@index([testRunCaseId])
+  @@index([sessionId])
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Milestone — release/target. Used in release readiness reports.
+// ──────────────────────────────────────────────────────────────────
+model Milestone {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  dueDate     DateTime?
+  status      String    @default("Active")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRuns TestRun[]
+
+  @@index([projectId])
+}

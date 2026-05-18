@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  /* Neutral, Linear-inspired palette */
+  --color-bg: #ffffff;
+  --color-bg-subtle: #f7f7f8;
+  --color-bg-sidebar: #fafafa;
+  --color-border: #e5e5e7;
+  --color-border-strong: #d4d4d8;
+  --color-fg: #111113;
+  --color-fg-muted: #6b6b73;
+  --color-fg-subtle: #97979e;
+
+  --color-accent: #5b5bd6;
+  --color-accent-fg: #ffffff;
+  --color-accent-bg-subtle: #eeeefb;
+
+  --color-success: #2b8a3e;
+  --color-success-bg: #e6f3eb;
+  --color-warn: #b85c00;
+  --color-warn-bg: #fbeedb;
+  --color-danger: #c0392b;
+  --color-danger-bg: #fbe9e7;
+  --color-info: #1e6cc5;
+  --color-info-bg: #e7f0fa;
+  --color-neutral: #6b6b73;
+  --color-neutral-bg: #efeff1;
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-fg);
+  --color-border: var(--color-border);
+  --color-muted: var(--color-fg-muted);
+  --color-accent: var(--color-accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tighten default focus rings to the accent. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
