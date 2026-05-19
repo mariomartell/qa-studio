@@ -22,11 +22,14 @@ const PRIORITY_MAP: Record<string, string> = {
 };
 
 function stripHtml(html: string): string {
+  let counter = 0;
   return html
-    .replace(/<li>/gi, "\n• ")
+    .replace(/<ol>/gi, () => { counter = 0; return ""; })
+    .replace(/<\/ol>/gi, "")
+    .replace(/<ul>/gi, "")
+    .replace(/<\/ul>/gi, "")
+    .replace(/<li>/gi, () => `\n${++counter}. `)
     .replace(/<\/li>/gi, "")
-    .replace(/<ol>|<ul>/gi, "")
-    .replace(/<\/ol>|<\/ul>/gi, "")
     .replace(/<p>/gi, "")
     .replace(/<\/p>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -49,7 +52,13 @@ async function main() {
   }
 
   const raw = fs.readFileSync(path.resolve(csvPath), "utf-8").replace(/^﻿/, ""); // strip BOM
-  const records = parse(raw, { columns: true, skip_empty_lines: true, relax_quotes: true }) as Record<string, string>[];
+  // columns: false to avoid duplicate "Description" header clobbering index 5 with index 21
+  const all = parse(raw, { columns: false, skip_empty_lines: true, relax_quotes: true }) as string[][];
+  const records = all.slice(1); // skip header row
+
+  // Column indices (0-based) from Testmo export:
+  // [1]=Case [5]=Description [7]=Expected [8]=Folder [11]=Priority [17]=Tags
+  const COL = { title: 1, desc: 5, expected: 7, folder: 8, priority: 11, tags: 17 };
 
   const project = await prisma.project.findUniqueOrThrow({ where: { key: "OGISO" } });
 
@@ -61,7 +70,7 @@ async function main() {
   // Build unique folder list from CSV (preserving order of first appearance)
   const folderNames: string[] = [];
   for (const row of records) {
-    const name = row["Folder"]?.trim();
+    const name = row[COL.folder]?.trim();
     if (name && !folderNames.includes(name)) folderNames.push(name);
   }
 
@@ -82,15 +91,15 @@ async function main() {
   // Create test cases
   let count = 0;
   for (const row of records) {
-    const title = row["Case"]?.trim();
+    const title = row[COL.title]?.trim();
     if (!title) continue;
 
-    const folderName = row["Folder"]?.trim();
+    const folderName = row[COL.folder]?.trim();
     const folderId = folderName ? (folderIdMap.get(folderName) ?? null) : null;
-    const rawDesc = row["Description"]?.trim() ?? "";
-    const rawExpected = row["Expected"]?.trim() ?? "";
-    const rawTags = row["Tags"]?.trim() ?? "";
-    const priority = PRIORITY_MAP[row["Priority"]?.trim()] ?? "Medium";
+    const rawDesc = row[COL.desc]?.trim() ?? "";
+    const rawExpected = row[COL.expected]?.trim() ?? "";
+    const rawTags = row[COL.tags]?.trim() ?? "";
+    const priority = PRIORITY_MAP[row[COL.priority]?.trim()] ?? "Medium";
 
     await prisma.testCase.create({
       data: {

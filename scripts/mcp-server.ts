@@ -61,6 +61,102 @@ server.tool(
   },
 );
 
+server.tool(
+  "create_folder",
+  "Create a new folder in a project. Supports nesting via parentFolderName.",
+  {
+    projectKey: z.string().describe("Project key e.g. OGISO"),
+    name: z.string().describe("Folder name"),
+    parentFolderName: z.string().optional().describe("Name of an existing folder to nest under"),
+  },
+  async ({ projectKey, name, parentFolderName }) => {
+    const project = await prisma.project.findUnique({ where: { key: projectKey.toUpperCase() } });
+    if (!project) return { content: [{ type: "text", text: `Project "${projectKey}" not found` }] };
+
+    // Idempotent — return existing folder if name already taken in this project
+    const existing = await prisma.folder.findFirst({ where: { name, projectId: project.id } });
+    if (existing) return { content: [{ type: "text", text: `Folder "${name}" already exists: ${JSON.stringify(existing, null, 2)}` }] };
+
+    let parentId: string | null = null;
+    if (parentFolderName) {
+      const parent = await prisma.folder.findFirst({ where: { name: parentFolderName, projectId: project.id } });
+      if (!parent) return { content: [{ type: "text", text: `Parent folder "${parentFolderName}" not found` }] };
+      parentId = parent.id;
+    }
+
+    // Place after the last sibling at the same level
+    const lastSibling = await prisma.folder.findFirst({
+      where: { projectId: project.id, parentId },
+      orderBy: { order: "desc" },
+    });
+    const order = (lastSibling?.order ?? -1) + 1;
+
+    const folder = await prisma.folder.create({
+      data: { projectId: project.id, parentId, name, order },
+    });
+    return { content: [{ type: "text", text: `Created folder: ${folder.id}\n${JSON.stringify(folder, null, 2)}` }] };
+  },
+);
+
+server.tool(
+  "delete_folder",
+  "Delete a folder by name. Cases inside are unassigned (not deleted).",
+  {
+    projectKey: z.string().describe("Project key e.g. OGISO"),
+    folderName: z.string().describe("Folder name to delete"),
+  },
+  async ({ projectKey, folderName }) => {
+    const project = await prisma.project.findUnique({ where: { key: projectKey.toUpperCase() } });
+    if (!project) return { content: [{ type: "text", text: `Project "${projectKey}" not found` }] };
+
+    const folder = await prisma.folder.findFirst({ where: { name: folderName, projectId: project.id } });
+    if (!folder) return { content: [{ type: "text", text: `Folder "${folderName}" not found` }] };
+
+    await prisma.folder.delete({ where: { id: folder.id } });
+    return { content: [{ type: "text", text: `Deleted folder "${folderName}" (${folder.id}). Cases were unlinked.` }] };
+  },
+);
+
+server.tool(
+  "move_cases_to_folder",
+  "Move test cases into a folder. Target by caseIds, caseTitles, or tags (comma-separated).",
+  {
+    projectKey: z.string().describe("Project key e.g. OGISO"),
+    folderName: z.string().describe("Target folder name"),
+    caseIds: z.array(z.string()).optional().describe("Move these specific case IDs"),
+    caseTitles: z.array(z.string()).optional().describe("Move cases whose titles match exactly"),
+    tags: z.string().optional().describe("Move all cases that contain this tag (e.g. 'auth')"),
+  },
+  async ({ projectKey, folderName, caseIds, caseTitles, tags }) => {
+    const project = await prisma.project.findUnique({ where: { key: projectKey.toUpperCase() } });
+    if (!project) return { content: [{ type: "text", text: `Project "${projectKey}" not found` }] };
+
+    const folder = await prisma.folder.findFirst({ where: { name: folderName, projectId: project.id } });
+    if (!folder) return { content: [{ type: "text", text: `Folder "${folderName}" not found` }] };
+
+    type WhereClause = {
+      projectId: string;
+      id?: { in: string[] };
+      title?: { in: string[] };
+      tags?: { contains: string };
+    };
+
+    const where: WhereClause = { projectId: project.id };
+    if (caseIds?.length) {
+      where.id = { in: caseIds };
+    } else if (caseTitles?.length) {
+      where.title = { in: caseTitles };
+    } else if (tags) {
+      where.tags = { contains: tags };
+    } else {
+      return { content: [{ type: "text", text: "Provide at least one of: caseIds, caseTitles, or tags" }] };
+    }
+
+    const result = await prisma.testCase.updateMany({ where, data: { folderId: folder.id } });
+    return { content: [{ type: "text", text: `Moved ${result.count} case(s) to folder "${folderName}" (${folder.id})` }] };
+  },
+);
+
 // ── Test Cases ───────────────────────────────────────────────────────────────
 
 server.tool(
